@@ -21,6 +21,7 @@ public class ApplicationInitConfig {
     private final PasswordEncoder passwordEncoder;
 
 
+
     @Bean
     ApplicationRunner applicationRunner(UserRepository userRepository){
         return args -> {

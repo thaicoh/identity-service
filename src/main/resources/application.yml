@@ -3,7 +3,11 @@ server:
   servlet:
     context-path: /identity
 
-
+logging:
+  level:
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    your.package.name: DEBUG
 
 
 spring:

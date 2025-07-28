@@ -3,6 +3,7 @@ package com.ThaiHoc.indentity_service.controller;
 import com.ThaiHoc.indentity_service.dto.request.AuthenticationRequest;
 import com.ThaiHoc.indentity_service.dto.request.IntrospectRequest;
 import com.ThaiHoc.indentity_service.dto.request.LogoutRequest;
+import com.ThaiHoc.indentity_service.dto.request.RefreshTokenRequest;
 import com.ThaiHoc.indentity_service.dto.response.ApiResponse;
 import com.ThaiHoc.indentity_service.dto.response.AuthenticationResponse;
 import com.ThaiHoc.indentity_service.dto.response.IntrospectResponse;
@@ -23,7 +24,7 @@ public class AuthenticationController {
     @Autowired
     AuthenticationService authenticationService;
 
-    @PostMapping("/log-in")
+    @PostMapping("/token")
     ApiResponse<AuthenticationResponse> authenticate(@RequestBody AuthenticationRequest request){
        AuthenticationResponse authenticationResponse = authenticationService.authenticate(request);
 
@@ -42,9 +43,20 @@ public class AuthenticationController {
     }
 
     @PostMapping("/logout")
-    ApiResponse<Void>  logout(@RequestBody LogoutRequest request){
-        return ApiResponse.<Void>builder()
-                .result(authenticationService.logout(request))
+    ApiResponse<Void>  logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException{
+
+        authenticationService.logout(request);
+
+        return ApiResponse.<Void>builder() // Void k can .result
+                .build();
+    }
+
+    @PostMapping("/refresh")
+    ApiResponse<AuthenticationResponse> refreshToken(@RequestBody RefreshTokenRequest request) throws ParseException, JOSEException {
+        AuthenticationResponse authenticationResponse = authenticationService.refreshToken(request);
+
+        return ApiResponse.<AuthenticationResponse>builder()
+                .result(authenticationResponse)
                 .build();
     }
 }

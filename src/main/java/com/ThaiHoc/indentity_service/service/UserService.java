@@ -3,8 +3,8 @@ package com.ThaiHoc.indentity_service.service;
 import com.ThaiHoc.indentity_service.dto.request.UserCreationRequest;
 import com.ThaiHoc.indentity_service.dto.request.UserUpdateRequest;
 import com.ThaiHoc.indentity_service.dto.response.UserResponse;
+import com.ThaiHoc.indentity_service.entity.Role;
 import com.ThaiHoc.indentity_service.entity.User;
-import com.ThaiHoc.indentity_service.enums.Role;
 import com.ThaiHoc.indentity_service.exception.AppException;
 import com.ThaiHoc.indentity_service.exception.ErrorCode;
 import com.ThaiHoc.indentity_service.mapper.UserMapper;
@@ -12,6 +12,7 @@ import com.ThaiHoc.indentity_service.repository.RoleRepository;
 import com.ThaiHoc.indentity_service.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -39,33 +41,41 @@ public class UserService {
 
     public UserResponse createUser(UserCreationRequest request){
 
-        if(userRepository.existsByUserName(request.getUserName())){
-            throw new AppException(ErrorCode.USER_EXISTED);
-        }
 
-        User user = userMapper.toUser(request);
-
-        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-
-        HashSet<String> role = new HashSet<>();
         //role.add(Role.USER.name());
         //user.setRoles(role);
 
-        userRepository.save(user);
+        try {
+            User user = userMapper.toUser(request);
 
-        return userMapper.toUserResponse(user);
+            PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+            HashSet<Role> roleUser = new HashSet<>();
+
+            roleUser.add(roleRepository.findById("USER").orElseThrow(() ->new AppException(ErrorCode.UNHANDLED_EXCEPTION)));
+
+            user.setRoles(roleUser);
+
+            userRepository.save(user);
+
+            return userMapper.toUserResponse(user);
+
+
+        } catch (DataIntegrityViolationException e) {
+            throw new AppException(ErrorCode.USER_EXISTED);
+        }
     }
 
 
-        @PreAuthorize("hasAuthority('SCOPE_UPDATE_DATA')") // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('SCOPE_ROLE_ADMIN')") // @PreAuthorize("hasRole('ADMIN')")
     public List<UserResponse> getUsers(){
         log.info("In method getUsers");
 
         return userMapper.toListUserResponse(userRepository.findAll());
     }
 
-    @PostAuthorize("returnObject.userName == authentication.name || hasAuthority('SCOPE_ADMIN')")
+    @PostAuthorize("returnObject.userName == authentication.name || hasAuthority('SCOPE_ROLE_ADMIN')")
     public UserResponse getUser(String userId){
         return userMapper.toUserResponse( userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found")));
     }

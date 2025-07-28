@@ -3,6 +3,7 @@ package com.ThaiHoc.indentity_service.service;
 import com.ThaiHoc.indentity_service.dto.request.AuthenticationRequest;
 import com.ThaiHoc.indentity_service.dto.request.IntrospectRequest;
 import com.ThaiHoc.indentity_service.dto.request.LogoutRequest;
+import com.ThaiHoc.indentity_service.dto.request.RefreshTokenRequest;
 import com.ThaiHoc.indentity_service.dto.response.AuthenticationResponse;
 import com.ThaiHoc.indentity_service.dto.response.IntrospectResponse;
 import com.ThaiHoc.indentity_service.entity.InvalidatedToken;
@@ -73,7 +74,11 @@ public class AuthenticationService {
         var token = request.getToken();
         boolean valid = true;
 
-
+        try {
+            verifyToken(token);
+        }catch (AppException exception){
+           valid = false;
+        }
 
         return IntrospectResponse.builder()
                 .valid(valid)
@@ -122,7 +127,7 @@ public class AuthenticationService {
         return stringJoiner.toString();
     }
 
-    private SignedJWT validateToken(String token) throws JOSEException, ParseException{
+    public SignedJWT verifyToken(String token) throws JOSEException, ParseException{
 
         JWSVerifier jwsVerifier = new MACVerifier(SIGNER_KEY.getBytes());
 
@@ -132,14 +137,55 @@ public class AuthenticationService {
 
         var verified =  signedJWT.verify(jwsVerifier);
 
+        if (!verified && exp.after(new Date()))
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+
+        if(invalidatedTokenRepository.existsById(signedJWT.getJWTClaimsSet().getJWTID()))
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+
         return signedJWT;
     }
 
-    public void logout(LogoutRequest request){
+    public void logout(LogoutRequest request) throws ParseException, JOSEException {
+        var signToken = verifyToken(request.getToken());
+
+        String jti = signToken.getJWTClaimsSet().getJWTID();
+        Date expiryTime = signToken.getJWTClaimsSet().getExpirationTime();
+
         invalidatedTokenRepository.save(
                 InvalidatedToken.builder()
-                        .id("S")
+                        .id(jti)
+                        .expiryTime(expiryTime)
                         .build()
         );
+    }
+
+    public AuthenticationResponse refreshToken(RefreshTokenRequest request) throws ParseException, JOSEException {
+        // Verify token
+        var signedJWT =  verifyToken(request.getToken());
+
+        // Add old token into invalidatedTokenRepository
+        invalidatedTokenRepository.save(
+                InvalidatedToken.builder()
+                        .expiryTime(signedJWT.getJWTClaimsSet().getExpirationTime())
+                        .id(signedJWT.getJWTClaimsSet().getJWTID())
+                        .build()
+        );
+
+        //Create new token
+            // get user info from request token
+        var userName = signedJWT.getJWTClaimsSet().getSubject();
+
+        var user = userRepository.findByUserName(userName).orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+
+            // create new token
+
+        var token = generateToken(user);
+
+        return AuthenticationResponse.builder()
+                .authenticated(true)
+                .token(token)
+                .build();
+
     }
 }
